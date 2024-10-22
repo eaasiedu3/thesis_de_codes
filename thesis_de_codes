@@ -1,0 +1,95 @@
+# Load necessary libraries
+library(deSolve)
+library(knitr)  # For table formatting
+library(dplyr)  # For data manipulation
+
+# Define parameters with the provided rates
+params <- c(
+  f = 0.37,        # 37% fertility rate in Ghana (WORLD BANK DATA)
+  delta = 0.023,   # 2.3% HIV prevalence among women aged 15-49
+  p = 0.8,         # 80% probability of remaining uninfected
+  alpha = 0.1,     # 10% of uninfected women become non-pregnant
+  beta = 0.05,     # 5% of infected women don't become pregnant
+  x = 0.2,         # 20% of uninfected women become pregnant
+  D = 0.28,        # 28% of pregnant women die (Mortality rate)
+  Dt = 0.1,        # Mortality rate of HIV-infected women
+  mu = 0.05,       # 15% probability of mother-to-child transmission without interventions
+  r = 0.35,         # 35% of children achieving viral suppression
+  d = 0.01         # Estimated death rate among HIV-infected children
+)
+
+# Define initial states
+initial_state <- c(
+  WS = 10000,  # Susceptible women
+  WNI = 9000,  # Women not infected with HIV
+  WI = 1000,   # Women infected with HIV
+  NP = 4500,   # Non-pregnant women without HIV
+  P = 4500,    # Pregnant women without HIV
+  NPWI = 300,  # Non-pregnant women with HIV
+  PWI = 700,   # Pregnant women with HIV
+  CNIP = 490,  # Children not infected during pregnancy
+  CIP = 210,   # Children infected during pregnancy
+  VS = 189,    # Virally suppressed children
+  D = 21       # Deaths of HIV-infected children
+)
+
+# Define the system of differential equations
+HIV_model <- function(time, state, params) {
+  with(as.list(c(state, params)), {
+    dWS <- f - delta * WS
+    dWNI <- (1 - p) * delta * WS - (alpha + (1-alpha) * D + x) * WNI
+    dWI <- p * delta * WS - ((1-beta) * Dt + beta + x) * WI
+    dNP <- alpha * WNI
+    dP <- x * WNI - D * P
+    dNPWI <- beta * WI
+    dPWI <- x * WI - (mu + Dt) * PWI
+    dCNIP <- (1 - mu) * PWI
+    dCIP <- mu * PWI - (r + d) * CIP
+    dVS <- r * CIP
+    dD <- d * CIP
+    
+    list(c(dWS, dWNI, dWI, dNP, dP, dNPWI, dPWI, dCNIP, dCIP, dVS, dD))
+  })
+}
+
+# Set time points (1 year, daily increments)
+times <- seq(0, 365, by = 1)
+
+# Solve the differential equations
+out <- as.data.frame(ode(y = initial_state, times = times, func = HIV_model, parms = params))
+
+# Generate summary statistics for key variables
+summary_stats <- out %>%
+  select(WI, PWI, CIP, NPWI, VS) %>%
+  summary()
+
+# Display summary statistics in a table format
+kable(summary_stats, caption = "Descriptive Statistics for HIV Infection Dynamics at the end of the Simulation")
+
+# Plot results focusing on infection dynamics, with y-axis limit set to 10000
+plot(times, out$CIP, type = "l", col = "brown", lwd = 2, xlab = "Time", ylab = "Population", main = "HIV Infection Dynamics at the end of the simulation", ylim = c(0, 1000))
+lines(times, out$WI, col = "green", lty = 2, lwd = 2)
+lines(times, out$PWI, col = "pink", lty = 3, lwd = 2)
+lines(times, out$CIP, col = "magenta", lty = 4, lwd = 2)
+lines(times, out$VS, col = "grey", lty = 5, lwd = 2)
+
+# Add legend
+legend("topleft", 
+       legend = c( "NPWI (Non-Pregnant Women Infected)", 
+                   "VS (Viral Suppression)"), 
+       col = c( "brown", "grey"), 
+       lty = c(1, 2, 3, 4, 5), 
+       lwd = 2.5)
+
+# Plot results focusing on infection dynamics, with y-axis limit set to 10000
+plot(times, out$WI, type = "l", col = "green", lwd = 2, xlab = "Time", ylab = "Population", main = "HIV Infection Dynamics at the end of Simulation", ylim = c(0, 1000))
+lines(times, out$PWI, col = "blue", lty = 6, lwd = 2)
+lines(times, out$CIP, col = "red", lty = 4, lwd = 2)
+
+# Add legend
+legend("topright", 
+       legend = c("WI (Women Infected)",  
+                  "PWI (Pregnant Women Infected)", "CIP (Children Infected during Pregnancy)"), 
+       col = c("green", "blue", "red"), 
+       lty = c(1, 2, 3, 4, 5), 
+       lwd = 3)
